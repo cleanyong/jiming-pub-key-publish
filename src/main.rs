@@ -268,7 +268,7 @@ fn build_record_page(record: PubKeyRecord, full_url: Option<&str>) -> Html<Strin
     </style>
   </head>
   <body>
-    <h1>Published Signing Public Key</h1>
+    <h1>极名-公钥发布系统 Published Signing Public Key</h1>
     <p><strong>ID:</strong> {id}</p>
     <p><strong>Public key:</strong><br><code>{key}</code></p>
     {note}
