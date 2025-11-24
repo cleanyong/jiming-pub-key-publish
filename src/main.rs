@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Host, Path, State},
+    extract::{Path, State},
     http::StatusCode,
     response::{Html, IntoResponse, Redirect},
     routing::{get, post},
@@ -12,7 +12,7 @@ use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     FromRow, SqlitePool,
 };
-use std::net::SocketAddr;
+use std::{env, net::SocketAddr};
 use uuid::Uuid;
 
 #[derive(Clone, Debug, Serialize, Deserialize, FromRow)]
@@ -25,6 +25,7 @@ struct PubKeyRecord {
 #[derive(Clone)]
 struct AppState {
     db: SqlitePool,
+    website_name: String,
 }
 
 #[derive(Deserialize)]
@@ -61,7 +62,11 @@ async fn main() {
     .await
     .expect("failed to create table");
 
-    let state = AppState { db };
+    // 從環境變量讀取網站名稱，默認為 jiming.cleanyong.familybankbank.com
+    let website_name = env::var("WEBSITE_NAME")
+        .unwrap_or_else(|_| "jiming.cleanyong.familybankbank.com".to_string());
+
+    let state = AppState { db, website_name };
 
     let app = Router::new()
         .route("/", get(show_form))
@@ -203,7 +208,6 @@ async fn handle_publish(
 async fn show_record(
     State(state): State<AppState>,
     Path(id): Path<String>,
-    Host(host): Host,
 ) -> impl IntoResponse {
     let record = sqlx::query_as::<_, PubKeyRecord>(
         "SELECT id, public_key, note FROM pub_keys WHERE id = ?",
@@ -214,7 +218,7 @@ async fn show_record(
 
     match record {
         Ok(Some(r)) => {
-            let full_url = format!("http://{host}/k/{}", r.id);
+            let full_url = format!("https://{}/k/{}", state.website_name, r.id);
             build_record_page(r, Some(&full_url)).into_response()
         }
         Ok(None) => (StatusCode::NOT_FOUND, "Key not found").into_response(),
