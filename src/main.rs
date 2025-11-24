@@ -91,7 +91,7 @@ async fn show_form() -> Html<String> {
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <title>Publish Your Signing Public Key</title>
+    <title>极名-公钥发布系统 Publish Your Signing Public Key</title>
     <style>
       body { font-family: sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem;
              background-color: #121212; color: #e0e0e0; }
@@ -105,7 +105,7 @@ async fn show_form() -> Html<String> {
     </style>
   </head>
   <body>
-    <h1>Publish Your Signing Public Key</h1>
+    <h1>极名-公钥发布系统 Publish Your Signing Public Key</h1>
     <p class="hint">
       建議使用 ED25519 (EdDSA) 的 public key，一行 Base64 表示。
     </p>
