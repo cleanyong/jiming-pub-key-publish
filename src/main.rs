@@ -69,8 +69,8 @@ async fn main() {
         .route("/k/:id", get(show_record))
         .with_state(state);
 
-    // 預設在 127.0.0.1:3000 監聽 (axum 0.7 用 axum::serve)
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    // 預設在 127.0.0.1:3003 監聽 (axum 0.7 用 axum::serve)
+    let addr = SocketAddr::from(([127, 0, 0, 1], 3003));
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     println!(
         "Key publish site running at http://{}/",
