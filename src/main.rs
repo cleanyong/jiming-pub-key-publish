@@ -1,16 +1,16 @@
 use axum::{
+    Form, Router,
     extract::{Path, State},
     http::StatusCode,
     response::{Html, IntoResponse, Redirect},
     routing::{get, post},
-    Form, Router,
 };
-use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
 use serde::{Deserialize, Serialize};
 use sqlx::{
-    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     FromRow, SqlitePool,
+    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
 };
 use std::{env, net::SocketAddr};
 use uuid::Uuid;
@@ -133,9 +133,16 @@ async fn handle_publish(
 ) -> impl IntoResponse {
     let trimmed_key = form.public_key.trim().to_string();
     if trimmed_key.is_empty() {
+        return (StatusCode::BAD_REQUEST, "public_key must not be empty").into_response();
+    }
+
+    if trimmed_key
+        .chars()
+        .any(|c| c.is_control() || c.is_whitespace())
+    {
         return (
             StatusCode::BAD_REQUEST,
-            "public_key must not be empty",
+            "public_key cannot contain whitespace or control characters",
         )
             .into_response();
     }
@@ -160,16 +167,12 @@ async fn handle_publish(
                 .into_response();
         }
         Err(_) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                "public_key must be valid base64",
-            )
-                .into_response();
+            return (StatusCode::BAD_REQUEST, "public_key must be valid base64").into_response();
         }
     }
 
     let id = Uuid::new_v4().to_string();
-    let mut note = form
+    let note = form
         .note
         .map(|n| n.trim().to_string())
         .filter(|n| !n.is_empty());
@@ -177,20 +180,16 @@ async fn handle_publish(
     // note 最長 100 bytes
     if let Some(ref n) = note {
         if n.as_bytes().len() > 100 {
-            return (
-                StatusCode::BAD_REQUEST,
-                "note must be at most 100 bytes",
-            )
-                .into_response();
+            return (StatusCode::BAD_REQUEST, "note must be at most 100 bytes").into_response();
         }
     }
 
-    if let Err(e) = sqlx::query(
+    if let Err(e) = sqlx::query!(
         "INSERT INTO pub_keys (id, public_key, note) VALUES (?, ?, ?)",
+        id,
+        trimmed_key,
+        note
     )
-    .bind(&id)
-    .bind(&trimmed_key)
-    .bind(&note)
     .execute(&state.db)
     .await
     {
@@ -205,19 +204,25 @@ async fn handle_publish(
     Redirect::to(&format!("/k/{id}")).into_response()
 }
 
-async fn show_record(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> impl IntoResponse {
-    let record = sqlx::query_as::<_, PubKeyRecord>(
-        "SELECT id, public_key, note FROM pub_keys WHERE id = ?",
+async fn show_record(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
+    if let Err(resp) = validate_record_id(&id) {
+        return resp.into_response();
+    }
+
+    let record = sqlx::query!(
+        r#"SELECT id as "id!: String", public_key as "public_key!: String", note as "note?" FROM pub_keys WHERE id = ?"#,
+        id
     )
-    .bind(&id)
     .fetch_optional(&state.db)
     .await;
 
     match record {
         Ok(Some(r)) => {
+            let r = PubKeyRecord {
+                id: r.id,
+                public_key: r.public_key,
+                note: r.note,
+            };
             let full_url = format!("https://{}/k/{}", state.website_name, r.id);
             build_record_page(r, Some(&full_url)).into_response()
         }
@@ -357,4 +362,16 @@ fn html_escape(s: &str) -> String {
             _ => c.to_string(),
         })
         .collect()
+}
+
+fn validate_record_id(id: &str) -> Result<(), (StatusCode, String)> {
+    // IDs are stored as UUID v4 strings; reject anything that is not a UUID to avoid
+    // accidental SQL injection attempts via the path parameter.
+    match Uuid::parse_str(id) {
+        Ok(_) => Ok(()),
+        Err(_) => Err((
+            StatusCode::BAD_REQUEST,
+            "invalid record id (must be a UUID)".to_string(),
+        )),
+    }
 }
