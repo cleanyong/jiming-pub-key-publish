@@ -1,6 +1,6 @@
 use axum::{
     Form, Router,
-    extract::{Path, State},
+    extract::{DefaultBodyLimit, Path, State},
     http::StatusCode,
     response::{Html, IntoResponse, Redirect},
     routing::{get, post},
@@ -72,7 +72,8 @@ async fn main() {
         .route("/", get(show_form))
         .route("/publish", post(handle_publish))
         .route("/k/:id", get(show_record))
-        .with_state(state);
+        .with_state(state)
+        .layer(DefaultBodyLimit::max(8 * 1024)); // keep submissions tiny to avoid abuse
 
     // 預設在 127.0.0.1:3003 監聽 (axum 0.7 用 axum::serve)
     let addr = SocketAddr::from(([127, 0, 0, 1], 3003));
